@@ -1,0 +1,31 @@
+{
+  "env": {
+    "NMR_ARTIFACTS_DIR": "artifacts",
+    "NMR_CKPT_DIR": "artifacts/checkpoints",
+    "NMR_SEARCH_CKPT": "artifacts/checkpoints/search.pth",
+    "NMR_DENOVO_CKPT": "artifacts/checkpoints/denovo_v3.pth",
+    "NMR_NMRNET_DIR": "artifacts/checkpoints/NMRNet_ckpt",
+    "NMR_KG_DATA_DIR": "artifacts/kg",
+    "NMR_CHEMBERTA_PATH": "artifacts/chemberta",
+    "NMR_OFFLINE_LMDB": "artifacts/offline/offline_cache.lmdb",
+    "NMRBENCH_ROOT": "artifacts/benchmarks",
+    "NMR_BENCH_DATA": "artifacts/benchmarks/nmrgym_test.json",
+    "NMR_FRAGMENT_LIB_DIR": "artifacts/fragments",
+    "NMR_RETRIEVAL_LMDB": "artifacts/checkpoints/embeddings_with_smiles.lmdb",
+    "NMR_FAISS_INDEX_PATH": "artifacts/checkpoints/faiss.index",
+    "NMR_ID_MAP_PATH": "artifacts/checkpoints/id_mapping.pkl",
+    "NMR_FORMULA_MAP_PATH": "artifacts/checkpoints/formula_to_ids_new.pkl",
+    "NMR_GAUSSIAN_FAISS_INDEX_PATH": "artifacts/checkpoints/gaussian_faiss.index",
+    "NMR_GAUSSIAN_ID_MAP_PATH": "artifacts/checkpoints/gaussian_id_mapping.pkl",
+    "CHEFNMR_CKPT_DIR": "artifacts/chefnmr-checkpoints",
+    "CHEFNMR_OFFLINE_CACHE": "artifacts/chefnmr-checkpoints/chefnmr_offline_cache.pkl",
+    "NMR_PUBSIM_REVERSE_DIR": "artifacts/pubsim_rich_shards",
+    "NMR_PUBSIM_META_LMDB": "artifacts/pubsim_metadata/PubChem_merged_id.lmdb",
+    "NMR_XIEHE_REVERSE_DIR": "artifacts/xiehe_reverse_index_shards",
+    "NMR_XIEHE_RICH_DIR": "artifacts/xiehe_rich_shards",
+    "NMR_RETRIEVAL_SERVICE_HOST": "127.0.0.1",
+    "NMR_RETRIEVAL_SERVICE_PORT": "8011",
+    "NMR_RETRIEVAL_CUDA_VISIBLE_DEVICES": "0",
+    "NMR_RETRIEVAL_PRELOAD": "1"
+  }
+}
