@@ -1,0 +1,23 @@
+openai_compatible:
+  backend: openai
+  model: gpt-5.4
+  base_url: https://yunwu.ai
+  api_key_env: OPENAI_API_KEY
+  max_tokens: 4096
+  temperature: 0.0
+
+multi_agent:
+  max_iterations: 4
+  planner_tool_descriptions:
+    - nmr_retrieve: database-backed candidate generation; can optionally save a candidate pool file.
+    - nmr_denovo: model-based candidate generation from formula plus query peaks; can optionally save a candidate pool file.
+    - nmr_merge_pools: merge retrieval and denovo pool files into a deduplicated merged pool.
+    - nmr_optimize: pool-only downstream optimizer over merged candidates; does not call retrieval or denovo internally.
+    - nmr_rerank: verifier-side alignment analysis that predicts candidate shifts and reports matched and unmatched peaks plus atom-level alignment diagnostics.
+  executor_tools:
+    - nmr_retrieve
+    - nmr_denovo
+    - nmr_merge_pools
+    - nmr_optimize
+  verifier_tools:
+    - nmr_rerank

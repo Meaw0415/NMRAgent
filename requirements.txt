@@ -1,0 +1,12 @@
+langgraph>=0.2.0
+langchain-core>=0.3.0
+openai>=1.0.0
+rdkit
+scipy
+numpy
+faiss-cpu
+lmdb
+msgpack
+tqdm
+requests
+flask
