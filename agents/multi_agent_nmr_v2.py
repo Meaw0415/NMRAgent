@@ -55,6 +55,9 @@ class MultiAgentState(TypedDict, total=False):
     trace_log_path: str
     dry_run_tools: bool
     seed_candidates: List[Dict[str, Any]]
+    kg_rag_output: Dict[str, Any]
+    textbook_rag_output: Dict[str, Any]
+    web_rag_output: Dict[str, Any]
 
 
 def _repo_root() -> Path:
@@ -128,10 +131,17 @@ class MultiAgentNMRV2:
         memory_store: Optional[InMemoryStore] = None,
         memory_top_k: int = 5,
         auto_remember_accepted: bool = False,
+        enable_kg_rag: bool = False,
+        kg_rag_top_k: int = 5,
+        kg_rag_neighbor_limit: int = 0,
+        enable_textbook_rag: bool = False,
+        textbook_rag_top_k: int = 5,
+        enable_web_rag: bool = False,
+        web_rag_top_k: int = 5,
         **backend_kwargs: Any,
     ) -> None:
         if backend != "openai":
-            raise ValueError("MultiAgentNMRV2 supports OpenAI-compatible backends only.")
+            raise ValueError("MultiAgentNMR supports OpenAI-compatible backends only.")
         self.model_name_or_path = model_name_or_path
         self.backend = backend
         self.backend_kwargs = backend_kwargs
@@ -145,6 +155,13 @@ class MultiAgentNMRV2:
         self.memory_store = memory_store or InMemoryStore()
         self.memory_top_k = int(backend_kwargs.pop("memory_top_k", memory_top_k))
         self.auto_remember_accepted = bool(backend_kwargs.pop("auto_remember_accepted", auto_remember_accepted))
+        self.enable_kg_rag = bool(backend_kwargs.pop("enable_kg_rag", enable_kg_rag))
+        self.kg_rag_top_k = int(backend_kwargs.pop("kg_rag_top_k", kg_rag_top_k))
+        self.kg_rag_neighbor_limit = int(backend_kwargs.pop("kg_rag_neighbor_limit", kg_rag_neighbor_limit))
+        self.enable_textbook_rag = bool(backend_kwargs.pop("enable_textbook_rag", enable_textbook_rag))
+        self.textbook_rag_top_k = int(backend_kwargs.pop("textbook_rag_top_k", textbook_rag_top_k))
+        self.enable_web_rag = bool(backend_kwargs.pop("enable_web_rag", enable_web_rag))
+        self.web_rag_top_k = int(backend_kwargs.pop("web_rag_top_k", web_rag_top_k))
         self.trace_log_path = self._init_trace_log_path(trace_log_path)
         self.nmr_skill_text = _read_text(_repo_root() / "NMR_SKILL.md")
         self.planner_prompt = build_planner_prompt(self.nmr_skill_text, self.planner_tool_descriptions)
@@ -162,6 +179,13 @@ class MultiAgentNMRV2:
             "dry_run_tools": dry_run_tools,
             "memory_top_k": self.memory_top_k,
             "auto_remember_accepted": self.auto_remember_accepted,
+            "enable_kg_rag": self.enable_kg_rag,
+            "kg_rag_top_k": self.kg_rag_top_k,
+            "kg_rag_neighbor_limit": self.kg_rag_neighbor_limit,
+            "enable_textbook_rag": self.enable_textbook_rag,
+            "textbook_rag_top_k": self.textbook_rag_top_k,
+            "enable_web_rag": self.enable_web_rag,
+            "web_rag_top_k": self.web_rag_top_k,
         })
 
     @classmethod
@@ -177,10 +201,10 @@ class MultiAgentNMRV2:
         model = overrides.pop("model_name_or_path", None) or overrides.pop("model", None) or openai_cfg.get("model", "gpt-5.4")
         return cls(
             model_name_or_path=model,
-            backend=openai_cfg.get("backend", "openai"),
-            planner_tool_descriptions=ma_cfg.get("planner_tool_descriptions") or DEFAULT_TOOL_DESCRIPTIONS,
-            executor_tools=ma_cfg.get("executor_tools") or DEFAULT_EXECUTOR_TOOLS,
-            verifier_tools=ma_cfg.get("verifier_tools") or DEFAULT_VERIFIER_TOOLS,
+            backend=overrides.pop("backend", openai_cfg.get("backend", "openai")),
+            planner_tool_descriptions=overrides.pop("planner_tool_descriptions", ma_cfg.get("planner_tool_descriptions") or DEFAULT_TOOL_DESCRIPTIONS),
+            executor_tools=overrides.pop("executor_tools", ma_cfg.get("executor_tools") or DEFAULT_EXECUTOR_TOOLS),
+            verifier_tools=overrides.pop("verifier_tools", ma_cfg.get("verifier_tools") or DEFAULT_VERIFIER_TOOLS),
             max_iterations=int(overrides.pop("max_iterations", ma_cfg.get("max_iterations", 4))),
             api_key=api_key,
             base_url=base_url,
@@ -190,6 +214,13 @@ class MultiAgentNMRV2:
             dry_run_tools=bool(overrides.pop("dry_run_tools", False)),
             memory_top_k=int(overrides.pop("memory_top_k", ma_cfg.get("memory_top_k", 5))),
             auto_remember_accepted=bool(overrides.pop("auto_remember_accepted", ma_cfg.get("auto_remember_accepted", False))),
+            enable_kg_rag=bool(overrides.pop("enable_kg_rag", ma_cfg.get("enable_kg_rag", False))),
+            kg_rag_top_k=int(overrides.pop("kg_rag_top_k", ma_cfg.get("kg_rag_top_k", 5))),
+            kg_rag_neighbor_limit=int(overrides.pop("kg_rag_neighbor_limit", ma_cfg.get("kg_rag_neighbor_limit", 0))),
+            enable_textbook_rag=bool(overrides.pop("enable_textbook_rag", ma_cfg.get("enable_textbook_rag", False))),
+            textbook_rag_top_k=int(overrides.pop("textbook_rag_top_k", ma_cfg.get("textbook_rag_top_k", 5))),
+            enable_web_rag=bool(overrides.pop("enable_web_rag", ma_cfg.get("enable_web_rag", False))),
+            web_rag_top_k=int(overrides.pop("web_rag_top_k", ma_cfg.get("web_rag_top_k", 5))),
             verifier_rerank_top_k=int(overrides.pop("verifier_rerank_top_k", ma_cfg.get("verifier_rerank_top_k", 10))),
             verifier_rerank_candidate_limit=int(overrides.pop("verifier_rerank_candidate_limit", ma_cfg.get("verifier_rerank_candidate_limit", 120))),
             **overrides,
@@ -202,7 +233,7 @@ class MultiAgentNMRV2:
             log_dir = _repo_root() / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
             stamp = time.strftime("%Y%m%d-%H%M%S")
-            path = log_dir / f"multi_agent_v2_trace_{stamp}_{os.getpid()}.jsonl"
+            path = log_dir / f"multi_agent_trace_{stamp}_{os.getpid()}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         return str(path)
 
@@ -417,6 +448,89 @@ class MultiAgentNMRV2:
         })
         return parsed
 
+    def _kg_rag_context(self, formula: str, h_shifts: List[float], c_shifts: List[float], task: str = "") -> Dict[str, Any]:
+        if not self.enable_kg_rag:
+            return {}
+        query_parts = [formula, task]
+        if c_shifts:
+            c_sorted = sorted(float(x) for x in c_shifts)
+            high_c = [x for x in c_sorted if x >= 160]
+            if high_c:
+                query_parts.append("downfield carbonyl lactone ester ketone")
+            if any(100 <= x <= 160 for x in c_sorted):
+                query_parts.append("alkene aromatic vinylic")
+            if any(50 <= x <= 90 for x in c_sorted):
+                query_parts.append("oxygenated sp3 carbon")
+        query = " ".join(str(x) for x in query_parts if x)
+        try:
+            from tools.kg_rag_tool import kg_graph_rag_search_impl
+
+            result = kg_graph_rag_search_impl(
+                query=query,
+                formula=formula,
+                top_k=self.kg_rag_top_k,
+                neighbor_limit=self.kg_rag_neighbor_limit,
+            )
+            self._trace("kg_rag", {"query": query, "valid": result.get("valid"), "evidence_count": len(result.get("evidence_pack", []))})
+            return result if isinstance(result, dict) else {"raw": result}
+        except Exception as exc:
+            self._trace("kg_rag_failed", {"query": query, "error": str(exc)})
+            return {"valid": 0, "error": str(exc), "evidence_pack": []}
+
+    def _evidence_query(self, formula: str, h_shifts: List[float], c_shifts: List[float], task: str = "") -> str:
+        query_parts = [formula, task]
+        if c_shifts:
+            c_sorted = sorted(float(x) for x in c_shifts)
+            if any(x >= 160 for x in c_sorted):
+                query_parts.append("13C downfield carbonyl lactone ester ketone")
+            if any(100 <= x <= 160 for x in c_sorted):
+                query_parts.append("13C alkene aromatic vinylic")
+            if any(50 <= x <= 90 for x in c_sorted):
+                query_parts.append("13C oxygenated sp3 carbon")
+        if h_shifts:
+            query_parts.append("1H chemical shift integration coupling")
+        return " ".join(str(x) for x in query_parts if x)
+
+    def _textbook_rag_context(self, formula: str, h_shifts: List[float], c_shifts: List[float], task: str = "") -> Dict[str, Any]:
+        if not self.enable_textbook_rag:
+            return {}
+        query = self._evidence_query(formula, h_shifts, c_shifts, task)
+        try:
+            from tools.textbook_rag_tool import textbook_nmr_search_impl
+
+            result = textbook_nmr_search_impl(
+                query=query,
+                formula=formula,
+                h_shifts=_csv(h_shifts),
+                c_shifts=_csv(c_shifts),
+                top_k=self.textbook_rag_top_k,
+            )
+            self._trace("textbook_rag", {"query": query, "valid": result.get("valid"), "evidence_count": len(result.get("evidence_pack", []))})
+            return result if isinstance(result, dict) else {"raw": result}
+        except Exception as exc:
+            self._trace("textbook_rag_failed", {"query": query, "error": str(exc)})
+            return {"valid": 0, "error": str(exc), "evidence_pack": []}
+
+    def _web_rag_context(self, formula: str, h_shifts: List[float], c_shifts: List[float], task: str = "") -> Dict[str, Any]:
+        if not self.enable_web_rag:
+            return {}
+        query = self._evidence_query(formula, h_shifts, c_shifts, task)
+        try:
+            from tools.web_rag_tool import web_nmr_search_impl
+
+            result = web_nmr_search_impl(
+                query=query,
+                formula=formula,
+                h_shifts=_csv(h_shifts),
+                c_shifts=_csv(c_shifts),
+                top_k=self.web_rag_top_k,
+            )
+            self._trace("web_rag", {"query": query, "valid": result.get("valid"), "evidence_count": len(result.get("evidence_pack", []))})
+            return result if isinstance(result, dict) else {"raw": result}
+        except Exception as exc:
+            self._trace("web_rag_failed", {"query": query, "error": str(exc)})
+            return {"valid": 0, "error": str(exc), "evidence_pack": []}
+
     def _planner_node(self, state: MultiAgentState) -> Dict[str, Any]:
         formula = state.get("formula", "")
         h_shifts = state.get("h_shifts", [])
@@ -432,6 +546,9 @@ class MultiAgentNMRV2:
             "previous_executor_output": state.get("executor_output", {}),
             "previous_verifier_output": state.get("verifier_output", {}),
             "relevant_confirmed_memories": self._get_relevant_memories(formula, h_shifts, c_shifts),
+            "retrieved_kg_evidence": state.get("kg_rag_output", {}),
+            "retrieved_textbook_evidence": state.get("textbook_rag_output", {}),
+            "retrieved_web_evidence": state.get("web_rag_output", {}),
         }
         plan = self._invoke_json_llm("planner", self.planner_prompt, payload)
         previous_verdict = (state.get("verifier_output") or {}).get("verdict")
@@ -538,7 +655,11 @@ class MultiAgentNMRV2:
         pool_paths = list(state.get("pooled_paths", []) or [])
         candidate_buffer = list(state.get("candidate_buffer", []) or [])
         formula = state.get("formula", "")
-        h_csv = _csv(state.get("h_shifts", []) or [])
+        h_values = list(state.get("h_shifts", []) or [])
+        # Denovo must preserve repeated 1H shifts from integration expansion.
+        # Retrieval can use unique representative shifts to avoid overweighting integrations.
+        h_csv_denovo = _csv(h_values)
+        h_csv_retrieval = _csv(list(dict.fromkeys(float(x) for x in h_values)))
         c_csv = _csv(state.get("c_shifts", []) or [])
         merged_pool_path = state.get("merged_pool_path")
         dry_run = bool(state.get("dry_run_tools", self.dry_run_tools))
@@ -563,8 +684,11 @@ class MultiAgentNMRV2:
             retrieval_top_k = max(retrieval_top_k, 100)
             denovo_top_k = max(denovo_top_k, 20)
 
-        if plan.get("use_retrieval") and "nmr_retrieve" in tools:
-            res = call_tool("nmr_retrieve", h_shifts=h_csv, c_shifts=c_csv, formula=formula, top_k=retrieval_top_k, save_pool_file=save_pool_file)
+        retrieval_tool = "nmr_retrieve" if "nmr_retrieve" in tools else "nmr_retrieve_service" if "nmr_retrieve_service" in tools else ""
+        denovo_tool = "nmr_denovo" if "nmr_denovo" in tools else "nmr_denovo_service" if "nmr_denovo_service" in tools else ""
+
+        if plan.get("use_retrieval") and retrieval_tool:
+            res = call_tool(retrieval_tool, h_shifts=h_csv_retrieval, c_shifts=c_csv, formula=formula, top_k=retrieval_top_k, save_pool_file=save_pool_file)
             actions.append("retrieval")
             rows = self._rows(res)
             for row in rows:
@@ -573,8 +697,8 @@ class MultiAgentNMRV2:
             if res.get("pool_path"):
                 pool_paths.append(str(res["pool_path"]))
 
-        if plan.get("use_denovo") and "nmr_denovo" in tools:
-            res = call_tool("nmr_denovo", h_shifts=h_csv, c_shifts=c_csv, formula=formula, top_k=denovo_top_k, save_pool_file=save_pool_file)
+        if plan.get("use_denovo") and denovo_tool:
+            res = call_tool(denovo_tool, h_shifts=h_csv_denovo, c_shifts=c_csv, formula=formula, top_k=denovo_top_k, save_pool_file=save_pool_file)
             actions.append("denovo")
             rows = self._rows(res)
             for row in rows:
@@ -597,7 +721,7 @@ class MultiAgentNMRV2:
 
         optimize_attempted = False
         if plan.get("need_opt_after_generation") and merged_pool_path and "nmr_optimize" in tools:
-            res = call_tool("nmr_optimize", pool_path=merged_pool_path, formula=formula, h_shifts=h_csv, c_shifts=c_csv, mode="hybrid", top_k=10, save_pool_file=True)
+            res = call_tool("nmr_optimize", pool_path=merged_pool_path, formula=formula, h_shifts=h_csv_denovo, c_shifts=c_csv, mode="hybrid", top_k=10, save_pool_file=True)
             actions.append("optimize")
             optimize_attempted = True
             candidate_buffer.extend(self._rows(res))
@@ -628,15 +752,19 @@ class MultiAgentNMRV2:
     def _verifier_node(self, state: MultiAgentState) -> Dict[str, Any]:
         candidates = list(state.get("candidate_buffer", []) or [])
         formula = state.get("formula", "")
-        h_csv = _csv(state.get("h_shifts", []) or [])
+        h_values = list(state.get("h_shifts", []) or [])
+        # Denovo must preserve repeated 1H shifts from integration expansion.
+        # Retrieval can use unique representative shifts to avoid overweighting integrations.
+        h_csv_denovo = _csv(h_values)
+        h_csv_retrieval = _csv(list(dict.fromkeys(float(x) for x in h_values)))
         c_csv = _csv(state.get("c_shifts", []) or [])
         dry_run = bool(state.get("dry_run_tools", self.dry_run_tools))
         rerank_output: Dict[str, Any] = {}
         verifier_tools = {name: None for name in self.verifier_tool_names} if dry_run else self._tool_map(self.verifier_tool_names)
         rerank_candidates = self._select_rerank_candidates(candidates, self.verifier_rerank_candidate_limit)
         if rerank_candidates and "nmr_rerank" in verifier_tools:
-            args = {"h_shifts": h_csv, "c_shifts": c_csv, "candidates": json.dumps(rerank_candidates, ensure_ascii=False, default=_json_default), "top_k": self.verifier_rerank_top_k, "formula": formula}
-            self._trace("tool_start", {"node": "verifier", "tool": "nmr_rerank", "args": {"h_shifts": h_csv, "c_shifts": c_csv, "top_k": self.verifier_rerank_top_k, "formula": formula, "candidates_count": len(rerank_candidates), "total_candidate_count": len(candidates)}})
+            args = {"h_shifts": h_csv_denovo, "c_shifts": c_csv, "candidates": json.dumps(rerank_candidates, ensure_ascii=False, default=_json_default), "top_k": self.verifier_rerank_top_k, "formula": formula}
+            self._trace("tool_start", {"node": "verifier", "tool": "nmr_rerank", "args": {"h_shifts": h_csv_denovo, "c_shifts": c_csv, "top_k": self.verifier_rerank_top_k, "formula": formula, "candidates_count": len(rerank_candidates), "total_candidate_count": len(candidates)}})
             if dry_run:
                 rerank_output = {"observation": "Dry-run skipped nmr_rerank.", "candidates": rerank_candidates[: self.verifier_rerank_top_k], "count": min(len(rerank_candidates), self.verifier_rerank_top_k)}
             else:
@@ -656,6 +784,9 @@ class MultiAgentNMRV2:
             "executor_output": state.get("executor_output", {}),
             "rerank_output": rerank_output,
             "relevant_confirmed_memories": self._get_relevant_memories(formula, state.get("h_shifts", []), state.get("c_shifts", [])),
+            "retrieved_kg_evidence": state.get("kg_rag_output", {}),
+            "retrieved_textbook_evidence": state.get("textbook_rag_output", {}),
+            "retrieved_web_evidence": state.get("web_rag_output", {}),
         })
         if verdict.get("verdict") not in {"accept", "need_opt", "need_bigger_pool", "need_retry"}:
             verdict["verdict"] = "need_retry"
@@ -693,6 +824,9 @@ class MultiAgentNMRV2:
         return workflow.compile()
 
     def run(self, task: str, *, formula: str, h_shifts: List[float], c_shifts: List[float], sample_idx: Optional[int] = None, max_iterations: Optional[int] = None, dry_run_tools: Optional[bool] = None, seed_candidates: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        kg_rag_output = self._kg_rag_context(formula, h_shifts, c_shifts, task)
+        textbook_rag_output = self._textbook_rag_context(formula, h_shifts, c_shifts, task)
+        web_rag_output = self._web_rag_context(formula, h_shifts, c_shifts, task)
         initial: MultiAgentState = {
             "task": task,
             "formula": formula,
@@ -713,6 +847,9 @@ class MultiAgentNMRV2:
             "trace_log_path": self.trace_log_path,
             "dry_run_tools": self.dry_run_tools if dry_run_tools is None else dry_run_tools,
             "seed_candidates": list(seed_candidates or []),
+            "kg_rag_output": kg_rag_output,
+            "textbook_rag_output": textbook_rag_output,
+            "web_rag_output": web_rag_output,
         }
         result = self.graph.invoke(initial)
         if "cand_list" not in result:

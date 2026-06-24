@@ -242,7 +242,7 @@ So yes: `nmr_rerank` is the stage that reranks the results from `retrieval` and 
 
 ## Current Debug Status
 
-Validated in `/hpc2hdd/home/zfang723/NMRAgent`:
+Validated from the repository root:
 - `nmr_retrieve`: runnable
 - `nmr_denovo`: runnable
 

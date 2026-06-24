@@ -483,12 +483,12 @@ class NMRAgent:
             return state
 
         # Find kg_rag tool
-        kg_tool = self.tool_map.get("kg_rag_retrieve")
+        kg_tool = self.tool_map.get("kg_graph_rag_search")
         if kg_tool is None:
             return state
 
         try:
-            result = kg_tool(query=formula)
+            result = kg_tool(query=formula, formula=formula)
             observation = result.get("observation", "") if isinstance(result, dict) else str(result)
         except Exception as e:
             observation = f"KG RAG error: {e}"
@@ -500,15 +500,15 @@ class NMRAgent:
                 "content": (
                     f"Thought: I should first check the Knowledge Graph for known compounds "
                     f"with formula {formula}.\n"
-                    f"Action: kg_rag_retrieve\n"
+                    f"Action: kg_graph_rag_search\n"
                     f'Input: {{"query": "{formula}"}}'
                 ),
-                "parsed": {"action": "kg_rag_retrieve", "input": {"query": formula}},
+                "parsed": {"action": "kg_graph_rag_search", "input": {"query": formula, "formula": formula}},
             },
             {
                 "role": "tool",
                 "content": observation,
-                "tool_name": "kg_rag_retrieve",
+                "tool_name": "kg_graph_rag_search",
             },
         ]
 

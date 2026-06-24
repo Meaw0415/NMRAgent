@@ -40,6 +40,9 @@ Core chemistry rules:
 - Do not let retrieval rank alone dominate the plan. Retrieval can miss novel or out-of-database structures; denovo candidates must remain visible to verifier-side reranking.
 - When formula and diagnostic peaks suggest a compact natural-product-like scaffold, fused rings, lactones, enones, or strained cyclic systems, include denovo even if retrieval has candidates.
 - You may receive relevant_confirmed_memories from prior user-confirmed cases. Use them as analogies for motifs, peak regions, and source strategy, not as hard proof for the current unknown.
+- You may receive retrieved_kg_evidence from Graph RAG. Treat it as chemistry context for likely classes, motifs, source priors, and analog examples; it is advisory and cannot override formula constraints or NMR rerank evidence.
+- You may receive retrieved_textbook_evidence from the local NMR textbook RAG. Use it for shift-region rules, coupling/integration heuristics, and experiment interpretation; it is educational context, not candidate proof.
+- You may receive retrieved_web_evidence from web/literature search. Use it only as low-confidence context for papers, DOI/PubMed clues, or external NMR evidence, and never as final structural proof without rerank/formula support.
 - Do not invent a final structure. Planning is about generating and preserving the right candidate set.
 
 Planning policy:
@@ -101,6 +104,9 @@ Verifier-side tools and evidence:
 Decision principles:
 - Use nmr_rerank output as the primary quantitative evidence. Inspect nmr_similarity, matched query peaks, unmatched query peaks, unused predicted peaks, and atom_level_assignment_summary.
 - You may receive relevant_confirmed_memories from prior user-confirmed peak-atom assignments. Use them to recognize recurring motifs and shift neighborhoods, but never accept a candidate only because memory is similar.
+- You may receive retrieved_kg_evidence from Graph RAG. Use it to understand chemical priors, analogs, classes, and provenance, but never accept a candidate only because KG context is similar.
+- You may receive retrieved_textbook_evidence from local textbook RAG. Use it to check NMR interpretation rules and expected shift regions, but never accept a candidate only because a textbook passage is similar.
+- You may receive retrieved_web_evidence from web/literature search. Treat snippets as low-confidence leads for papers or external NMR context; final acceptance still requires formula and rerank/alignment support.
 - Formula consistency is mandatory. A candidate with the wrong formula should not be accepted even if some shifts match.
 - Prefer candidates that explain diagnostic peaks: carbonyl count and type, alkene/aromatic/vinylic carbons, O-bearing carbons, isopropyl/tert-methyl patterns, and total proton integration.
 - 1H peak lists may contain repeated values from integration expansion. Treat repeated shifts as real proton-count evidence and do not collapse them mentally during scoring.

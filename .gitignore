@@ -71,3 +71,24 @@ artifacts/pools/*
 plan.md
 
 NMR_SKILL.md
+
+textbook/
+
+# Inactive legacy tool modules; v2 uses retrieval/denovo/rerank/inplace_edit/opt/merge/KG RAG only.
+tools/nmr_kg_rag_tool.py
+tools/nmr_mol_edit_tool.py
+tools/nmr_fragment_search_tool.py
+tools/nmr_chefnmr_denovo_tool.py
+tools/nmr_chefnmr_offline_denovo_tool.py
+tools/nmr_offline_tools.py
+tools/kg_tools.py
+tools/nmr_solver_style_tool.py
+tools/nmr_solver_style_brics_tool.py
+tools/nmr_solver_style_core.py
+tools/fast_opt_tools.py
+tools/gaussian_search_library.py
+tools/shared_lmdb.py
+
+environment.full.lock.yml
+
+environment.nmragent.yml
