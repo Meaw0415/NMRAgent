@@ -1,4 +1,4 @@
-"""Backward-compatible import surface for the stable v2 multi-agent framework."""
+"""Import surface for the stable multi-agent framework."""
 
 from __future__ import annotations
 

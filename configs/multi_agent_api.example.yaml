@@ -1,7 +1,7 @@
 openai_compatible:
   backend: openai
-  model: gpt-5.4
-  base_url: https://yunwu.ai
+  model: gpt-4o-mini
+  base_url: https://api.openai.com/v1
   api_key_env: OPENAI_API_KEY
   max_tokens: 4096
   temperature: 0.0
