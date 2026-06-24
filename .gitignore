@@ -92,3 +92,5 @@ tools/shared_lmdb.py
 environment.full.lock.yml
 
 environment.nmragent.yml
+supp.md
+tool.md
