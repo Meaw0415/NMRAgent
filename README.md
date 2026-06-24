@@ -266,28 +266,3 @@ export SERPER_API_KEY=...
 export BRAVE_SEARCH_API_KEY=...
 ```
 
-## 10. What Not To Publish
-
-Keep these local/private:
-
-```text
-configs/runtime_assets.local.json
-configs/multi_agent_api.local.yaml
-environment.full.lock.yml
-environment.nmragent.yml
-logs/
-artifacts/
-*.pth, *.pt, *.ckpt, *.safetensors
-*.lmdb, *.index, *.pkl
-```
-
-Before pushing to GitHub, scan for local paths and secrets. Keep the pattern in a shell variable so the README does not self-match:
-
-```bash
-PRIVATE_SCAN_PATTERN='/(hpc2|gemini)|local-user-name|secret-key-prefix|private-checkpoint-dir|private-spool-dir'
-rg -n "$PRIVATE_SCAN_PATTERN" . \
-  -g '!configs/*.local.*' \
-  -g '!logs/**' \
-  -g '!artifacts/**' \
-  -g '!environment*.lock.yml'
-```
