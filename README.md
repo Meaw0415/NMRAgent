@@ -2,11 +2,28 @@
 
 Official repository for **Towards Generalizable and Evidential Nuclear Magnetic Resonance-Based Molecular Structure Elucidation via Large Language Model Agent**.
 
+**Paper:** [arXiv:2606.29776](https://arxiv.org/abs/2606.29776)
+
 ![NMRAgent overview](docs/assets/NMRAgent_BC1.png)
 
 [PDF version of the overview figure](docs/assets/NMRAgent_BC1.pdf)
 
 NMRAgent is a LangGraph-based agent framework for NMR-driven molecular structure elucidation. The repository contains the agent runtime, tool wrappers, service entrypoints, and environment templates. Large model/data artifacts and machine-local configs are not part of the public repository.
+
+## Table of Contents
+
+- [1. Install Environment](#1-install-environment)
+- [2. Configure Data and Model Paths](#2-configure-data-and-model-paths)
+- [3. Configure LLM API](#3-configure-llm-api)
+- [4. One-Shot Multi-Agent Run Mode](#4-one-shot-multi-agent-run-mode)
+- [5. Terminal Multi-Turn Chat Mode](#5-terminal-multi-turn-chat-mode)
+- [6. Web Chat Frontend](#6-web-chat-frontend)
+- [7. Persistent Retrieval and De Novo Services](#7-persistent-retrieval-and-de-novo-services)
+- [8. Full Local Chat Stack](#8-full-local-chat-stack)
+- [9. Optional Web RAG Keys](#9-optional-web-rag-keys)
+- [10. Data Availability](#10-data-availability)
+- [11. Acknowledgements](#11-acknowledgements)
+- [12. Citation](#12-citation)
 
 ## 1. Install Environment
 
@@ -266,6 +283,30 @@ export SERPER_API_KEY=...
 export BRAVE_SEARCH_API_KEY=...
 ```
 
-## 10. Acknowledgements
+## 10. Data Availability
 
-We thank our collaborators for helpful discussions on NMR spectroscopy, natural-product structure elucidation, and experimental validation. We also acknowledge the maintainers and contributors of the open-source software and public scientific resources that make NMRAgent possible, including LangGraph, RDKit, FAISS, and the NMR data resources used in this project.
+Benchmark and database datasets used in this study are publicly available. The source data for the PubChem-NMRNet database are available from Hugging Face at [SimNMR-PubChem](https://huggingface.co/datasets/yqj01/SimNMR-PubChem). The NMRGym dataset is available at [Hugging Face](https://huggingface.co/datasets/meaw0415/NMRGym). The processed nmrshiftdb dataset is available at [Zenodo](https://zenodo.org/records/19142375), and the Exp450 dataset is available at [Zenodo](https://doi.org/10.5281/zenodo.16952024). Detailed information on dataset construction, preprocessing, and benchmark splits is provided in the Supplementary Information.
+
+For construction of the retrieval database, a subset of NMR spectra was simulated from molecular structures using the commercially available Gaussian quantum-chemistry software.
+
+The downstream structural elucidation and structural revision cases were obtained from publicly available literature, including [Altechromone A](https://pubs.acs.org/doi/10.1021/np1005604), [Samoquasine A](https://pubs.acs.org/doi/10.1021/acs.jnatprod.8b00319), the [natural tetrahydroquinoxaline-6-carboxylic acid isolated from *Caulis Sinomenii*](https://pubs.acs.org/doi/10.1021/acs.jnatprod.5c01215), [C5-hydroxy-cyclo(L-Pro-L-Leu)](https://chemrxiv.org/doi/10.26434/chemrxiv-2026-gb0hz), and the [coumarin dimers isolated from *Hydrangea davidii*](https://analyticalsciencejournals.onlinelibrary.wiley.com/doi/10.1002/mrc.70105). The only non-publicly sourced downstream case was the *Vitex trifolia* case, for which experimental NMR data were provided by Peking Union Medical College/Chinese Academy of Medical Sciences (PUMC/CAMS).
+
+## 11. Acknowledgements
+
+We thank our collaborators for helpful discussions on NMR spectroscopy, natural-product structure elucidation, and experimental validation. We gratefully acknowledge funding and institutional support from **The Hong Kong University of Science and Technology (Guangzhou) (HKUST(GZ))**. We also thank Peking Union Medical College/Chinese Academy of Medical Sciences (PUMC/CAMS) for providing experimental NMR data for the *Vitex trifolia* case. We acknowledge the maintainers and contributors of the open-source software and public scientific resources that make NMRAgent possible, including LangGraph, RDKit, FAISS, and the NMR data resources used in this project.
+
+## 12. Citation
+
+If you find NMRAgent useful in your research, please cite our paper:
+
+**Paper:** [Towards Generalizable and Evidential Nuclear Magnetic Resonance-Based Molecular Structure Elucidation via Large Language Model Agent](https://arxiv.org/abs/2606.29776)
+
+```bibtex
+@article{fang2026towards,
+  title={Towards Generalizable and Evidential Nuclear Magnetic Resonance-Based Molecular Structure Elucidation via Large Language Model Agent},
+  author={Fang, Zheng and Yang, Chen and Tan, Yusen and Zhao, Yunpeng and Xu, Fanjie and Xiang, Hongxin and Sun, Hanyu and Gao, Hanyu and Wang, Xiaojian and Du, Wenjie and Li, Yuqiang and Xia, Jun},
+  journal={arXiv preprint arXiv:2606.29776},
+  year={2026},
+  doi={10.48550/arXiv.2606.29776}
+}
+```
