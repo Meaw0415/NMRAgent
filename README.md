@@ -266,3 +266,6 @@ export SERPER_API_KEY=...
 export BRAVE_SEARCH_API_KEY=...
 ```
 
+## 10. Acknowledgements
+
+We thank our collaborators for helpful discussions on NMR spectroscopy, natural-product structure elucidation, and experimental validation. We also acknowledge the maintainers and contributors of the open-source software and public scientific resources that make NMRAgent possible, including LangGraph, RDKit, FAISS, and the NMR data resources used in this project.
