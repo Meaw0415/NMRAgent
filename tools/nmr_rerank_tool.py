@@ -300,9 +300,24 @@ def nmr_rerank(
 
         for cand, pred_result in zip(valid_candidates, pred_results):
             if pred_result.get('valid', False):
-                pred_h = pred_result['H_shifts']
-                pred_c = pred_result['C_shifts']
                 atom_data = pred_result.get('atom_data', [])
+                if atom_data:
+                    # Use the raw, per-atom (unmerged) predictions for scoring.
+                    # pred_result['C_shifts'] runs equivalent carbons through
+                    # merge_equi_nmr, averaging symmetry-equivalent carbons into
+                    # one value. That collapses the predicted C set's size (e.g.
+                    # 20 -> 10 for a molecule with a real 2-fold symmetry), while
+                    # the query peak list is not correspondingly deduplicated.
+                    # _set_match_score's sqrt(len(x)*len(y)) normalization then
+                    # punishes exactly the molecules whose symmetry the merge
+                    # was trying to reflect -- the more symmetric (often more
+                    # correct) candidate ends up scored lower purely from this
+                    # set-size mismatch, not from worse shift agreement.
+                    pred_h = [a['shift'] for a in atom_data if a['element'] == 'H']
+                    pred_c = [a['shift'] for a in atom_data if a['element'] == 'C']
+                else:
+                    pred_h = pred_result['H_shifts']
+                    pred_c = pred_result['C_shifts']
 
                 # Calculate similarity
                 nmr_sim = _calculate_nmr_similarity(h_list, c_list, pred_h, pred_c)

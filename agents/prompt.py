@@ -11,6 +11,7 @@ DEFAULT_TOOL_DESCRIPTIONS: List[str] = [
     "nmr_merge_pools: merge retrieval, denovo, and other pool files into one deduplicated candidate pool while preserving source labels.",
     "nmr_optimize: pool-only downstream optimizer over merged candidates; it should refine or diversify existing candidates and must not silently replace retrieval or denovo.",
     "nmr_rerank: verifier-side NMRNet-style forward prediction and alignment analysis; reports matched/unmatched peaks, similarity, and atom-level diagnostics.",
+    "nmr_verify_hypothesis: audit candidate exclusions and test explicitly labeled proton-integration and atom-assignment hypotheses using existing NMRNet predictions.",
     "nmr_canonicalize_smiles: late-stage RDKit utility for canonicalizing one SMILES string.",
     "nmr_replace_atom: late-stage RDKit in-place atom replacement by atom index; use only after a high-confidence local-edit hypothesis.",
     "nmr_delete_atom: late-stage RDKit in-place atom deletion by atom index; use only after a high-confidence local-edit hypothesis.",
@@ -62,6 +63,7 @@ Return JSON only. Required keys:
 - need_large_pool: boolean.
 - need_opt_after_generation: boolean.
 - notes_for_executor: concrete execution notes, including any integration expansion, memory analogy, or source-diversity requirements.
+- verification_hypotheses: a list, empty when no additional verification is needed. To execute an integration/assignment check, provide an object with label, assumptions, h_shifts, c_shifts, carbonyl_shifts, sp2_h_shifts, methoxy_h_shifts, and allow_missing_exchangeable_h. h_shifts may change multiplicities of observed proton shifts only; c_shifts must retain the original entries and multiplicities. Keep unconfirmed integrations labeled as hypotheses. Numeric operations requested only in notes_for_executor are not executed.
 """
 
 
@@ -102,17 +104,23 @@ Verifier-side tools and evidence:
 {_tool_text(tool_descriptions)}
 
 Decision principles:
-- Use nmr_rerank output as the primary quantitative evidence. Inspect nmr_similarity, matched query peaks, unmatched query peaks, unused predicted peaks, and atom_level_assignment_summary.
+- Use nmr_rerank's spectrum-level Hungarian set-matching similarity as the primary quantitative evidence, together with chemical consistency. In the default implementation each matched pair contributes exp(-delta^2/(2*sigma^2)), normalized by sqrt(number_of_query_peaks * number_of_predicted_peaks); sigma is 1.0 ppm for 1H and 10.0 ppm for 13C. When both spectra are present their similarities are averaged. These widths are matching parameters, not calibrated prediction error bars, and the similarity is not a probability of correctness.
+- Forward-predicted shifts are approximate. Compare candidates using their overall spectral compatibility, peak coverage, and chemically plausible assignments. An isolated large absolute shift residual is a warning to investigate, not an automatic rejection threshold. Do not require every predicted shift to equal the experimental value or invent an absolute-error cutoff that has not been calibrated.
+- Distinguish the set-matching score from the per-atom assignment diagnostics: the reported assignments minimize total absolute shift distance, whereas the similarity maximizes Gaussian pair weights. They may use different optimal permutations. Do not infer that a large residual in the diagnostic assignment invalidates the spectrum-level matching score.
+- Inspect matched query peaks, unmatched query peaks, unused predicted peaks, and atom_level_assignment_summary. Compare the strongest alternatives on the same basis; a small numerical score difference alone does not establish which structure is correct.
 - You may receive relevant_confirmed_memories from prior user-confirmed peak-atom assignments. Use them to recognize recurring motifs and shift neighborhoods, but never accept a candidate only because memory is similar.
 - You may receive retrieved_kg_evidence from Graph RAG. Use it to understand chemical priors, analogs, classes, and provenance, but never accept a candidate only because KG context is similar.
 - You may receive retrieved_textbook_evidence from local textbook RAG. Use it to check NMR interpretation rules and expected shift regions, but never accept a candidate only because a textbook passage is similar.
 - You may receive retrieved_web_evidence from web/literature search. Treat snippets as low-confidence leads for papers or external NMR context; final acceptance still requires formula and rerank/alignment support.
 - Formula consistency is mandatory. A candidate with the wrong formula should not be accepted even if some shifts match.
-- Prefer candidates that explain diagnostic peaks: carbonyl count and type, alkene/aromatic/vinylic carbons, O-bearing carbons, isopropyl/tert-methyl patterns, and total proton integration.
+- Prefer candidates that jointly explain diagnostic peak regions, carbonyl count and type, alkene/aromatic/vinylic carbons, O-bearing carbons, isopropyl/tert-methyl patterns, total proton integration, and the number and multiplicities of 13C environments. Structural symmetry is independent evidence that may distinguish close spectrum-level scores, but coincident or missing experimental peaks must remain possible when the input is incomplete.
 - 1H peak lists may contain repeated values from integration expansion. Treat repeated shifts as real proton-count evidence and do not collapse them mentally during scoring.
+- Keep compact peak lists distinct from proton-expanded lists. Where integrations are unspecified, evaluate explicitly labeled hypotheses and state which assumptions support the selected candidate. Do not silently change the input or treat a hypothesis as a measured integration.
 - Retrieval score, denovo score, and optimize score are secondary. A denovo candidate with superior rerank alignment should beat a retrieval candidate with a better retrieval rank.
-- Penalize structures with major unexplained query peaks, missing downfield carbonyls, wrong number of 13C environments, invalid valence, impossible formula, or forced peak assignments with large residuals.
-- Accept only when the best candidate has coherent H and C alignment and the residual issues are chemically minor.
+- Reject invalid valence and formula mismatches. Penalize unsupported functional groups, incompatible peak counts or integrations, and assignments that substitute an exchangeable proton for a required carbon-bound proton or a noncarbonyl carbon for a required carbonyl. Evaluate these chemical contradictions separately from numerical prediction errors.
+- Accept the best-supported candidate when the joint spectrum-level matching and independent chemical evidence distinguish it from the strongest alternatives, while reporting material prediction uncertainty. Explain why competing structures are less consistent. Acceptance is a structure prediction from the available candidate set; it does not require uniformly small absolute residuals or exhaustive diagnostics for every lower-ranked candidate. If the strongest alternatives remain indistinguishable, retain uncertainty and request the specific evidence needed to distinguish them.
+- Whenever at least one valid formula-consistent candidate is available, you must propose exactly one best candidate in top_candidate. Compare the strongest alternatives and make the best supported choice from the available evidence, even when more data would be useful. For an unresolved tie, state the ambiguity and the basis for your provisional choice. Keep the proposed structure separate from the acceptance verdict: need_retry, need_opt, or need_bigger_pool must still include your current best candidate. Use null only when no valid formula-consistent candidate is available.
+- Distinguish expected top-k output truncation and explicitly classified formula/duplicate exclusions from failed computation. A new pool filename alone does not establish that its candidate structures changed. Raise a provenance issue when there is evidence of differing content or an unresolved mismatch that materially affects the candidate comparison.
 - Request need_bigger_pool when the correct scaffold appears absent or source diversity is weak.
 - Request need_opt when several candidates are close and a local edit/optimization could plausibly fix a specific mismatch.
 - Request need_retry when tool execution failed, candidate formatting is malformed, or evidence is insufficient.
@@ -120,7 +128,7 @@ Decision principles:
 
 Return JSON only with keys:
 - verdict: one of ["accept", "need_opt", "need_bigger_pool", "need_retry"].
-- analysis: short evidence summary grounded in rerank/alignment diagnostics.
-- top_candidate: best SMILES if verdict is accept, otherwise the current best candidate or null.
+- analysis: short evidence summary comparing the strongest alternatives using spectrum-level matching, chemical consistency, and material uncertainty; identify any integration assumptions used.
+- top_candidate: exactly one best available formula-consistent SMILES, required for every verdict when any valid candidate is available; null only if none is available.
 - retry_recommendation: concrete next action for the Planner/Executor.
 """

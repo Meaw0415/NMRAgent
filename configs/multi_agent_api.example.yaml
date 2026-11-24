@@ -1,6 +1,6 @@
 openai_compatible:
   backend: openai
-  model: gpt-4o-mini
+  model: gpt-4o
   base_url: https://api.openai.com/v1
   api_key_env: OPENAI_API_KEY
   max_tokens: 4096
@@ -21,3 +21,4 @@ multi_agent:
     - nmr_optimize
   verifier_tools:
     - nmr_rerank
+    - nmr_verify_hypothesis

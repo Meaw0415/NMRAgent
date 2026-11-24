@@ -31,7 +31,7 @@ from .prompt import (
 
 load_runtime_assets()
 DEFAULT_EXECUTOR_TOOLS = ["nmr_retrieve", "nmr_denovo", "nmr_merge_pools", "nmr_optimize"]
-DEFAULT_VERIFIER_TOOLS = ["nmr_rerank"]
+DEFAULT_VERIFIER_TOOLS = ["nmr_rerank", "nmr_verify_hypothesis"]
 MEMORY_NAMESPACE = ("nmr_agent", "confirmed_cases")
 
 
@@ -54,6 +54,8 @@ class MultiAgentState(TypedDict, total=False):
     max_iterations: int
     trace_log_path: str
     dry_run_tools: bool
+    reuse_rerank_output: bool
+    verification_hypothesis_results: List[Dict[str, Any]]
     seed_candidates: List[Dict[str, Any]]
     kg_rag_output: Dict[str, Any]
     textbook_rag_output: Dict[str, Any]
@@ -145,6 +147,7 @@ class MultiAgentNMRV2:
         self.model_name_or_path = model_name_or_path
         self.backend = backend
         self.backend_kwargs = backend_kwargs
+        self.trace_full_prompts = bool(backend_kwargs.pop("trace_full_prompts", False))
         self.max_iterations = max_iterations
         self.executor_tool_names = executor_tools or list(DEFAULT_EXECUTOR_TOOLS)
         self.verifier_tool_names = verifier_tools or list(DEFAULT_VERIFIER_TOOLS)
@@ -172,7 +175,7 @@ class MultiAgentNMRV2:
             "backend": backend,
             "model": model_name_or_path,
             "base_url": self._effective_base_url(),
-            "api_key": _mask_secret(self._api_key()),
+            "api_key_configured": bool(self._api_key()),
             "executor_tools": self.executor_tool_names,
             "verifier_tools": self.verifier_tool_names,
             "max_iterations": max_iterations,
@@ -419,7 +422,10 @@ class MultiAgentNMRV2:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False, default=_json_default)},
         ]
-        self._trace("llm_request", {"node": node, "model": self.model_name_or_path, "payload_keys": sorted(payload.keys())})
+        request_log = {"node": node, "model": self.model_name_or_path, "payload_keys": sorted(payload.keys())}
+        if self.trace_full_prompts:
+            request_log["messages"] = messages
+        self._trace("llm_request", request_log)
         started = time.time()
         try:
             response = self._client().chat.completions.create(
@@ -443,7 +449,7 @@ class MultiAgentNMRV2:
             "node": node,
             "elapsed_sec": round(time.time() - started, 3),
             "finish_reason": response.choices[0].finish_reason,
-            "content": content[:4000],
+            "content": content if self.trace_full_prompts else content[:4000],
             "parsed": parsed,
         })
         return parsed
@@ -762,9 +768,13 @@ class MultiAgentNMRV2:
         rerank_output: Dict[str, Any] = {}
         verifier_tools = {name: None for name in self.verifier_tool_names} if dry_run else self._tool_map(self.verifier_tool_names)
         rerank_candidates = self._select_rerank_candidates(candidates, self.verifier_rerank_candidate_limit)
-        if rerank_candidates and "nmr_rerank" in verifier_tools:
+        if state.get("reuse_rerank_output") and state.get("rerank_output"):
+            rerank_output = state["rerank_output"]
+            self._trace("reuse_previous_rerank", {"candidate_count": len(rerank_output.get("candidates", []))})
+        elif rerank_candidates and "nmr_rerank" in verifier_tools:
             args = {"h_shifts": h_csv_denovo, "c_shifts": c_csv, "candidates": json.dumps(rerank_candidates, ensure_ascii=False, default=_json_default), "top_k": self.verifier_rerank_top_k, "formula": formula}
-            self._trace("tool_start", {"node": "verifier", "tool": "nmr_rerank", "args": {"h_shifts": h_csv_denovo, "c_shifts": c_csv, "top_k": self.verifier_rerank_top_k, "formula": formula, "candidates_count": len(rerank_candidates), "total_candidate_count": len(candidates)}})
+            logged_args = args if self.trace_full_prompts else {"h_shifts": h_csv_denovo, "c_shifts": c_csv, "top_k": self.verifier_rerank_top_k, "formula": formula, "candidates_count": len(rerank_candidates), "total_candidate_count": len(candidates)}
+            self._trace("tool_start", {"node": "verifier", "tool": "nmr_rerank", "args": logged_args})
             if dry_run:
                 rerank_output = {"observation": "Dry-run skipped nmr_rerank.", "candidates": rerank_candidates[: self.verifier_rerank_top_k], "count": min(len(rerank_candidates), self.verifier_rerank_top_k)}
             else:
@@ -775,6 +785,31 @@ class MultiAgentNMRV2:
                     rerank_output = {"observation": f"Error in nmr_rerank: {exc}", "candidates": [], "count": 0, "error": str(exc)}
             self._trace("tool_end", {"node": "verifier", "tool": "nmr_rerank", "result": rerank_output})
 
+        hypothesis_results = []
+        hypotheses = (state.get("planner_output") or {}).get("verification_hypotheses") or []
+        for hypothesis in hypotheses:
+            try:
+                hypothesis = dict(hypothesis)
+                hypothesis.setdefault("h_shifts", list(h_values))
+                hypothesis.setdefault("c_shifts", list(state.get("c_shifts", [])))
+                hypothesis["h_shifts"] = [float(v) for v in hypothesis["h_shifts"]]
+                if any(not any(abs(v - q) < 1e-6 for q in h_values) for v in hypothesis["h_shifts"]):
+                    raise ValueError("A verification hypothesis may change H multiplicities, not add unobserved shifts")
+                if hypothesis["c_shifts"] != list(state.get("c_shifts", [])):
+                    raise ValueError("A verification hypothesis must preserve all original C shifts")
+                if "nmr_verify_hypothesis" not in verifier_tools:
+                    raise ValueError("nmr_verify_hypothesis is not enabled")
+                kwargs = {"candidates": rerank_output.get("candidates", []), "pool_candidates": candidates,
+                          "formula": formula, "hypothesis": hypothesis}
+                self._trace("tool_start", {"node": "verifier", "tool": "nmr_verify_hypothesis", "args": kwargs})
+                result = verifier_tools["nmr_verify_hypothesis"](**kwargs)
+                self._trace("tool_end", {"node": "verifier", "tool": "nmr_verify_hypothesis", "result": result})
+                hypothesis_results.append(result)
+            except Exception as exc:
+                result = {"error": str(exc), "hypothesis": hypothesis}
+                self._trace("verification_hypothesis_failed", result)
+                hypothesis_results.append(result)
+
         verdict = self._invoke_json_llm("verifier", self.verifier_prompt, {
             "task": state.get("task", ""),
             "formula": formula,
@@ -783,6 +818,7 @@ class MultiAgentNMRV2:
             "iteration": state.get("iteration", 0),
             "executor_output": state.get("executor_output", {}),
             "rerank_output": rerank_output,
+            "verification_hypothesis_results": hypothesis_results,
             "relevant_confirmed_memories": self._get_relevant_memories(formula, state.get("h_shifts", []), state.get("c_shifts", [])),
             "retrieved_kg_evidence": state.get("kg_rag_output", {}),
             "retrieved_textbook_evidence": state.get("textbook_rag_output", {}),
@@ -801,6 +837,7 @@ class MultiAgentNMRV2:
         update = {
             "verifier_output": verdict,
             "rerank_output": rerank_output,
+            "verification_hypothesis_results": hypothesis_results,
             "cand_list": rerank_output.get("candidates", rerank_candidates[: self.verifier_rerank_top_k]) if isinstance(rerank_output, dict) else rerank_candidates[: self.verifier_rerank_top_k],
             "final_answer": final_answer,
             "next_stage": next_stage,

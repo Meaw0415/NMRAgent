@@ -1,0 +1,56 @@
+[
+  {
+    "idx": 0,
+    "formula": "C9H9ClO",
+    "h_shifts": [
+      1.22,
+      2.97,
+      7.4,
+      7.5,
+      7.85,
+      7.92
+    ],
+    "c_shifts": [
+      9.19,
+      32.27,
+      121.69,
+      124.57,
+      130.34,
+      133.23,
+      190.92
+    ],
+    "reference_smiles": "CCC(=O)c1cccc(Cl)c1"
+  },
+  {
+    "idx": 1,
+    "formula": "C12H25O4S-",
+    "h_shifts": [
+      0.86,
+      1.25,
+      1.48,
+      3.7
+    ],
+    "c_shifts": [
+      23.61,
+      26.5,
+      29.38,
+      32.27,
+      64.0
+    ],
+    "reference_smiles": "CCCCCCCCCCCCOS(=O)(=O)[O-]"
+  },
+  {
+    "idx": 2,
+    "formula": "C13H10O3",
+    "h_shifts": [
+      7.38
+    ],
+    "c_shifts": [
+      115.92,
+      124.57,
+      144.76,
+      147.65
+    ],
+    "reference_smiles": "O=C(Oc1ccccc1)Oc1ccccc1"
+  }
+]

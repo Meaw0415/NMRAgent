@@ -37,6 +37,9 @@ benchmarks/
 *.ipynb
 .vscode/
 .idea/
+.claude/
+.codex/
+.codex_aim/
 *.swp
 *.swo
 *~
@@ -46,6 +49,7 @@ venv/
 .venv/
 env/
 .env
+.env.*
 *.env
 
 conda-meta/
@@ -58,19 +62,21 @@ conda-meta/
 wandb/
 mlruns/
 
-artifacts/*
-!artifacts/.gitkeep
-!artifacts/**/.gitkeep
+/artifacts/
+/experiments/
+/appeal/
+/reviewer_materials/
 
 configs/runtime_assets.local.json
 configs/multi_agent_api.local.yaml
-
-artifacts/pools/*
-!artifacts/pools/.gitkeep
+configs/*.local.*
+configs/runtime_assets.json
+configs/multi_agent_api.yaml
+/auth.json
+/credentials.json
 
 plan.md
 
-NMR_SKILL.md
 
 textbook/
 
@@ -85,7 +91,6 @@ tools/kg_tools.py
 tools/nmr_solver_style_tool.py
 tools/nmr_solver_style_brics_tool.py
 tools/nmr_solver_style_core.py
-tools/fast_opt_tools.py
 tools/gaussian_search_library.py
 tools/shared_lmdb.py
 
@@ -94,3 +99,7 @@ environment.full.lock.yml
 environment.nmragent.yml
 supp.md
 tool.md
+
+# Only the reviewed case-study logs belong in the public examples.
+!examples/case_studies/compound_1/trace.log
+!examples/case_studies/compound_2/trace.log

@@ -20,6 +20,7 @@ _TOOL_SPECS = {
     "nmr_denovo": (".nmr_denovo_tool", "nmr_denovo"),
     "nmr_denovo_service": (".nmr_denovo_service_tool", "nmr_denovo_service"),
     "nmr_rerank": (".nmr_rerank_tool", "nmr_rerank"),
+    "nmr_verify_hypothesis": (".nmr_verification_tool", "nmr_verify_hypothesis"),
     "nmr_canonicalize_smiles": (".nmr_inplace_edit_tool", "nmr_canonicalize_smiles"),
     "nmr_replace_atom": (".nmr_inplace_edit_tool", "nmr_replace_atom"),
     "nmr_delete_atom": (".nmr_inplace_edit_tool", "nmr_delete_atom"),

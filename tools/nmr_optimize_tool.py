@@ -372,12 +372,25 @@ def filter_solver_fragment_pool(rows: List[dict], max_per_formula: int, max_tota
     return out
 
 
-def search_solver_pairs(fragments: List[dict], target_formula: Counter[str], max_pairs: int, enforce_formula_match: bool) -> List[dict]:
+def search_solver_pairs(fragments: List[dict], target_formula: Counter[str], max_pairs: int, enforce_formula_match: bool, query_h: List[float], query_c: List[float]) -> List[dict]:
+    """
+    Rank candidate (left, right) fragment pairs by how well their MERGED shift
+    set matches the query spectrum (Hungarian assignment via _set_match_score),
+    not by summing each fragment's own independent match score. Summing
+    independent scores rewards large fragments that individually explain most
+    of the query on their own, which biases pairing toward two near-whole
+    fragments (assemblies far larger than the target molecule) instead of
+    complementary halves that together reproduce the query.
+    """
+    import numpy as np
+
     by_cut = defaultdict(list)
     for row in fragments:
         by_cut[row["cut_type_key"]].append(row)
     out = []
     seen = set()
+    query_h_arr = np.array(query_h, dtype=float) if query_h else np.array([])
+    query_c_arr = np.array(query_c, dtype=float) if query_c else np.array([])
     for left in fragments:
         for right in by_cut.get(left["complement_cut_type_key"], []):
             if left["source_smiles"] == right["source_smiles"]:
@@ -389,7 +402,12 @@ def search_solver_pairs(fragments: List[dict], target_formula: Counter[str], max
             if key in seen:
                 continue
             seen.add(key)
-            out.append({"left_frag_id": left["frag_id"], "right_frag_id": right["frag_id"], "score": float(left["frag_score"] + right["frag_score"]), "pair_formula": pair_formula})
+            merged_h = np.array(sorted(list(left.get("frag_h", [])) + list(right.get("frag_h", []))), dtype=float)
+            merged_c = np.array(sorted(list(left.get("frag_c", [])) + list(right.get("frag_c", []))), dtype=float)
+            h_score = _set_match_score(query_h_arr, merged_h, 1.0) if query_h_arr.size and merged_h.size else 0.0
+            c_score = _set_match_score(query_c_arr, merged_c, 10.0) if query_c_arr.size and merged_c.size else 0.0
+            score = float(h_score + c_score)
+            out.append({"left_frag_id": left["frag_id"], "right_frag_id": right["frag_id"], "score": score, "pair_formula": pair_formula})
     out.sort(key=lambda x: x["score"], reverse=True)
     return out[:max_pairs]
 
@@ -444,18 +462,18 @@ def merge_unique(existing: List[dict], new_rows: List[dict]) -> List[dict]:
 def _run_fast_crossover_mode(formula: str, query_h: List[float], query_c: List[float], pool: List[dict], top_k: int, keep_original: int, keep_new: int, rounds: int, max_fragments: int, max_per_formula: int, max_pairs: int, max_new_per_round: int, min_heavy_atoms: int, recursive_max_depth: int, min_frag_score: float, max_heavy_atom_excess: int, allow_off_formula_intermediate: bool) -> dict:
     current_pool = list(pool)
     target_formula = Counter(parse_formula(formula))
-    target_heavy_atoms = 999
-    for row in current_pool:
-        mol = Chem.MolFromSmiles(row.get("smiles", ""))
-        if mol is not None:
-            target_heavy_atoms = min(target_heavy_atoms, mol.GetNumHeavyAtoms())
+    # Heavy-atom count of the TARGET formula itself (exact), not a heuristic
+    # derived from whatever happens to be in the seed pool. The old
+    # min-over-pool heuristic could be thrown off by a single small/malformed
+    # seed candidate, silently rejecting every correctly-sized assembly.
+    target_heavy_atoms = sum(count for elem, count in target_formula.items() if elem != "H")
     all_new_rows: List[dict] = []
     rounds_meta: List[dict] = []
     for round_idx in range(1, rounds + 1):
         enforce_formula_match = (not allow_off_formula_intermediate) or (round_idx == rounds)
         frag_pool = build_solver_fragment_pool(current_pool, query_h, query_c, min_heavy_atoms, recursive_max_depth)
         frag_pool = filter_solver_fragment_pool(frag_pool, max_per_formula, max_fragments, min_frag_score)
-        pair_rows = search_solver_pairs(frag_pool, target_formula, max_pairs, enforce_formula_match)
+        pair_rows = search_solver_pairs(frag_pool, target_formula, max_pairs, enforce_formula_match, query_h, query_c)
         new_rows = assemble_solver_pairs(pair_rows, frag_pool, target_formula, existing_smiles={clear_atom_maps_and_canon(x.get("smiles", "")) for x in current_pool if x.get("smiles")}, max_new=max_new_per_round, enforce_formula_match=enforce_formula_match, target_heavy_atoms=target_heavy_atoms, max_heavy_atom_excess=max_heavy_atom_excess)
         current_pool = merge_unique(current_pool, new_rows)
         all_new_rows = merge_unique(all_new_rows, new_rows)
@@ -497,7 +515,7 @@ def _build_observation(mode: str, prepared: dict, result: dict, elapsed_s: float
     name="nmr_optimize",
     description="Pool-only downstream optimization for NMRAgent. Consumes an upstream candidate pool from retrieval / denovo and never calls retrieval or denovo internally.",
 )
-def nmr_optimize(candidates: str = "", pool_path: str = "", formula: str = "", h_shifts: str = "", c_shifts: str = "", mode: str = "hybrid", top_k: int = 20, keep_formula: int = 300, keep_nonformula: int = 300, pool_limit: int = 800, topk_per_fragment: int = 1000, num_filter_pair: int = 200000, max_new: int = 500, rerank_keep_original: int = 40, rerank_keep_new: int = 100, disable_formula_pair_prune: bool = False, brics_max_fragments: int = 1200, brics_max_per_formula: int = 12, brics_beam_size: int = 300, brics_max_combos: int = 200, brics_max_choice_variants: int = 6, brics_max_products_per_combo: int = 10, fast_rounds: int = 1, fast_max_fragments: int = 1000, fast_max_per_formula: int = 10, fast_max_pairs: int = 500, fast_max_new_per_round: int = 100, fast_min_heavy_atoms: int = 5, fast_recursive_max_depth: int = 1, fast_min_frag_score: float = 0.0, fast_max_heavy_atom_excess: int = 12, allow_off_formula_intermediate: bool = False, save_pool_file: bool = False, output_pool_path: str = "") -> dict:
+def nmr_optimize(candidates: str = "", pool_path: str = "", formula: str = "", h_shifts: str = "", c_shifts: str = "", mode: str = "hybrid", top_k: int = 20, keep_formula: int = 300, keep_nonformula: int = 300, pool_limit: int = 800, topk_per_fragment: int = 1000, num_filter_pair: int = 200000, max_new: int = 500, rerank_keep_original: int = 40, rerank_keep_new: int = 200, disable_formula_pair_prune: bool = False, brics_max_fragments: int = 1200, brics_max_per_formula: int = 12, brics_beam_size: int = 300, brics_max_combos: int = 200, brics_max_choice_variants: int = 6, brics_max_products_per_combo: int = 10, fast_rounds: int = 3, fast_max_fragments: int = 2000, fast_max_per_formula: int = 30, fast_max_pairs: int = 1500, fast_max_new_per_round: int = 300, fast_min_heavy_atoms: int = 5, fast_recursive_max_depth: int = 1, fast_min_frag_score: float = 0.0, fast_max_heavy_atom_excess: int = 12, allow_off_formula_intermediate: bool = False, save_pool_file: bool = False, output_pool_path: str = "") -> dict:
     t0 = time.time()
     if pool_path:
         payload = load_pool(pool_path)
